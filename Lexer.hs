@@ -1,10 +1,11 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-missing-signatures #-}
 {-# LANGUAGE CPP #-}
-{-# LINE 1 "Lexer.x" #-}
+{-# LINE 4 "Lexer.x" #-}
 
 module Main (main) where
 
 import System.Environment
+import System.Directory
 import Data.Char
 
 #if __GLASGOW_HASKELL__ >= 603
@@ -528,25 +529,43 @@ alex_deflt :: Array Int Int
 alex_deflt = listArray (0,68) [-1,-1,-1,-1,9,9,-1,11,11,15,15,18,18,19,19,19,67,67,67,19,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,19]
 
 alex_accept = listArray (0::Int,68) [AlexAccNone,AlexAccNone,AlexAccNone,AlexAccNone,AlexAccNone,AlexAccNone,AlexAccNone,AlexAccNone,AlexAccNone,AlexAccNone,AlexAccNone,AlexAccNone,AlexAccNone,AlexAccNone,AlexAccNone,AlexAccNone,AlexAccNone,AlexAccNone,AlexAccNone,AlexAccNone,AlexAccSkip,AlexAcc (alex_action_1),AlexAccSkip,AlexAcc (alex_action_3),AlexAcc (alex_action_4),AlexAcc (alex_action_5),AlexAcc (alex_action_6),AlexAcc (alex_action_7),AlexAcc (alex_action_8),AlexAcc (alex_action_9),AlexAcc (alex_action_10),AlexAcc (alex_action_11),AlexAcc (alex_action_12),AlexAcc (alex_action_13),AlexAcc (alex_action_14),AlexAcc (alex_action_15),AlexAcc (alex_action_16),AlexAcc (alex_action_17),AlexAcc (alex_action_18),AlexAcc (alex_action_19),AlexAcc (alex_action_20),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_21),AlexAcc (alex_action_22),AlexAcc (alex_action_23),AlexAcc (alex_action_23),AlexAcc (alex_action_23)]
-{-# LINE 52 "Lexer.x" #-}
+{-# LINE 62 "Lexer.x" #-}
 
+-----------------------------------------------------------------------------
 -- Taken from Haskell.Language.TH source code then slightly modified
+-----------------------------------------------------------------------------
 byteToString :: Byte -> Char
 byteToString = chr . fromIntegral
 
+
+-----------------------------------------------------------------------------
+-- Generate an error when an unknown character is found in the input string
+-----------------------------------------------------------------------------
 unknown :: AlexInput -> Int -> Alex Token
 unknown (p, c, bs, s) n = myErr (p, c, bs, s) ("Unknown Character: \"" ++ (take 1 s) ++ "\"")
 
+-----------------------------------------------------------------------------
+-- Give the error message meaningful output (position of error from input)
+-----------------------------------------------------------------------------
 myErr :: AlexInput -> String -> Alex Token
 myErr ((AlexPn p1 p2 p3), c, bs, s) mssg = error $ mssg ++ " at line " ++ (show p2) ++ ", column " ++ (show p3)
 
+-----------------------------------------------------------------------------
+-- A wrapper function to track how many opening multi-line comments need closing
+-----------------------------------------------------------------------------
 multi :: AlexInput -> Int -> Alex Token
 multi alexIn i = do
         currentIn <- alexGetInput
         alexSetInput $ multi' currentIn 1
         alexMonadScan
-        
 
+-----------------------------------------------------------------------------
+-- Helper for multi, so the counter can be initialized to 0 at first call
+-- The logic is to case over the input string byte-by-byte, discarding anything
+-- found that isn't a closing delimeter. However; single line comments take precedent
+-- (thus, ignore the entire line following any '%', including closing delimeters).
+-----------------------------------------------------------------------------        
+multi' :: (Eq a, Num a) => AlexInput -> a -> (AlexPosn, Char, [Byte], String)
 multi' alexIn 0 = alexIn
 multi' alexIn n = do
         case (alexGetByte alexIn) of
@@ -575,6 +594,11 @@ multi' alexIn n = do
                     _   -> multi' rest n
 
 
+-----------------------------------------------------------------------------
+-- This is a helper function for multi' in the case a single line comment is
+-- found. This will recursively analyze the string byte-by-byte, only stopping
+-- when a new-line is encountered.
+-----------------------------------------------------------------------------
 endLine :: AlexInput -> Maybe AlexInput
 endLine alexIn = do
         case alexGetByte alexIn of
@@ -585,6 +609,10 @@ endLine alexIn = do
                     _   -> endLine rest
 
 
+-----------------------------------------------------------------------------
+-- This function reads the next token from the input string, and recursively
+-- does so until the EOF.
+-----------------------------------------------------------------------------
 tokens :: [Token] -> Alex [Token]
 tokens ts = do
         next <- alexMonadScan
@@ -592,62 +620,129 @@ tokens ts = do
             TEOF -> return ts
             otherwise -> tokens (ts ++ [next])
 
-data Token = IF AlexPosn
-            |THEN AlexPosn
-            |WHILE AlexPosn
-            |DO AlexPosn
-            |INPUT AlexPosn
-            |ELSE AlexPosn
-            |BEGIN AlexPosn
-            |END AlexPosn
-            |WRITE AlexPosn
-            |ID [Char] AlexPosn
-            |NUM Int AlexPosn
-            |ADD AlexPosn
-            |ASSIGN AlexPosn
-            |SUB AlexPosn
-            |MUL AlexPosn
-            |DIV AlexPosn
-            |LPAR AlexPosn
-            |RPAR AlexPosn
-            |SEMICOLON AlexPosn
+-----------------------------------------------------------------------------
+-- The data type for lexical Tokens.
+-----------------------------------------------------------------------------
+data Token = TIF AlexPosn
+            |TTHEN AlexPosn
+            |TWHILE AlexPosn
+            |TDO AlexPosn
+            |TINPUT AlexPosn
+            |TELSE AlexPosn
+            |TBEGIN AlexPosn
+            |TEND AlexPosn
+            |TWRITE AlexPosn
+            |TID [Char] AlexPosn
+            |TNUM Int AlexPosn
+            |TADD AlexPosn
+            |TASSIGN AlexPosn
+            |TSUB AlexPosn
+            |TMUL AlexPosn
+            |TDIV AlexPosn
+            |TLPAR AlexPosn
+            |TRPAR AlexPosn
+            |TSEMICOLON AlexPosn
             |TEOF
-        deriving (Eq, Show)
+        deriving (Eq)
 
+-----------------------------------------------------------------------------
+-- When showing the user the data, the position of the pattern is irrelevant,
+-- defining our own instance of Show allows us to maintain the information
+-- as it needs to be passed on to the parser eventually, without creating a 
+-- mess for debugging.
+-----------------------------------------------------------------------------
+instance Show Token where
+    show tok = case tok of
+        TIF _ -> "IF"
+        TTHEN _ -> "THEN" 
+        TWHILE _ -> "WHILE"
+        TDO _ -> "DO"
+        TINPUT _ -> "INPUT"
+        TELSE _ -> "ELSE"
+        TBEGIN _ -> "BEGIN"
+        TEND _ -> "END"
+        TWRITE _ -> "WRITE"
+        TID var _ -> "ID (" ++ (show var) ++ ")"
+        TNUM n _ -> "NUM (" ++ (show n) ++ ")"
+        TADD _ -> "ADD"
+        TASSIGN _ -> "ASSIGN"
+        TSUB _ -> "SUB"
+        TMUL _ -> "MUL"
+        TDIV _ -> "DIV"
+        TLPAR _ -> "LPAR"
+        TRPAR _ -> "RPAR"
+        TSEMICOLON _ -> "SEMICOLON"
+        
+
+-----------------------------------------------------------------------------
+-- I honestly have no idea why Alex required us to define this ourself.
+-----------------------------------------------------------------------------
 alexEOF :: Alex Token
 alexEOF = return TEOF
 
+-----------------------------------------------------------------------------
+-- The main routine of this module (when not served as a stand-alone application)
+-----------------------------------------------------------------------------
+lexer :: String -> [Token]
 lexer inStr = do
         case (runAlex inStr $ tokens []) of
             Right ts -> ts
-            Left ts -> error "Lex Fail"
+            Left mssg -> error "Lex Fail"
 
+-----------------------------------------------------------------------------
+-- Easier to read than printing out the list in-line. This prints each token
+-- on it's own individual line. (I believe, mapM_ is required due to Alex's 
+-- monad wrapper)
+-----------------------------------------------------------------------------
+pPrint :: [Token] -> IO ()
+pPrint tokens = mapM_  (putStrLn.show) tokens
+
+-----------------------------------------------------------------------------
+-- Take the file name from the argument!
+-- I'm allowing the user to pass a flag "-l" as an argument in the case pretty
+-- printing is not desired, this will instead print out the list in a single line.
+-----------------------------------------------------------------------------
+main :: IO ()
 main = do
-    file <- getArgs
-    s <- readFile (file !! 0)
-    print $ lexer s
-
+    args <- getArgs
+    case (length args) of
+        1 -> do
+            isFile <- doesFileExist (args !! 0)
+            case isFile of
+                True -> do
+                    content <- readFile (args !! 0)
+                    pPrint $ lexer content
+                False -> error "Error! File not found."
+        2 -> case (args !! 0) of
+                "-l" -> do
+                    isFile <- doesFileExist (args !! 1)
+                    case isFile of
+                        True -> do
+                            content <- readFile (args !! 1)
+                            print $ lexer content
+                        False -> error "Error! File not found."
+        otherwise -> error "Error! Invalid use. expected either the argument(s) \"./Lexer <filename>\" for pretty printed output, or \"./Lexer -l <filename>\" for the token list as output. "
 
 alex_action_1 = multi
-alex_action_3 = \(p,_,_,_) i -> return $ IF p
-alex_action_4 = \(p,_,_,_) i -> return $ THEN p
-alex_action_5 = \(p,_,_,_) i -> return $ WHILE p
-alex_action_6 = \(p,_,_,_) i -> return $ DO p
-alex_action_7 = \(p,_,_,_) i -> return $ INPUT p
-alex_action_8 = \(p,_,_,_) i -> return $ ELSE p
-alex_action_9 = \(p,_,_,_) i -> return $ BEGIN p
-alex_action_10 = \(p,_,_,_) i -> return $ END p
-alex_action_11 = \(p,_,_,_) i -> return $ WRITE p
-alex_action_12 = \(p,_,_,_) i -> return $ ASSIGN p
-alex_action_13 = \(p,_,_,_) i -> return $ ADD p
-alex_action_14 = \(p,_,_,_) i -> return $ SUB p
-alex_action_15 = \(p,_,_,_) i -> return $ MUL p
-alex_action_16 = \(p,_,_,_) i -> return $ DIV p
-alex_action_17 = \(p,_,_,_) i -> return $ LPAR p
-alex_action_18 = \(p,_,_,_) i -> return $ RPAR p
-alex_action_19 = \(p,_,_,_) i -> return $ SEMICOLON p
-alex_action_20 = \(p,_,_,s) i -> return $ NUM (read (take i s)) p
-alex_action_21 = \(p,_,_,s) i -> return $ ID (take i s) p
+alex_action_3 = \(p,_,_,_) i -> return $ TIF p
+alex_action_4 = \(p,_,_,_) i -> return $ TTHEN p
+alex_action_5 = \(p,_,_,_) i -> return $ TWHILE p
+alex_action_6 = \(p,_,_,_) i -> return $ TDO p
+alex_action_7 = \(p,_,_,_) i -> return $ TINPUT p
+alex_action_8 = \(p,_,_,_) i -> return $ TELSE p
+alex_action_9 = \(p,_,_,_) i -> return $ TBEGIN p
+alex_action_10 = \(p,_,_,_) i -> return $ TEND p
+alex_action_11 = \(p,_,_,_) i -> return $ TWRITE p
+alex_action_12 = \(p,_,_,_) i -> return $ TASSIGN p
+alex_action_13 = \(p,_,_,_) i -> return $ TADD p
+alex_action_14 = \(p,_,_,_) i -> return $ TSUB p
+alex_action_15 = \(p,_,_,_) i -> return $ TMUL p
+alex_action_16 = \(p,_,_,_) i -> return $ TDIV p
+alex_action_17 = \(p,_,_,_) i -> return $ TLPAR p
+alex_action_18 = \(p,_,_,_) i -> return $ TRPAR p
+alex_action_19 = \(p,_,_,_) i -> return $ TSEMICOLON p
+alex_action_20 = \(p,_,_,s) i -> return $ TNUM (read (take i s)) p
+alex_action_21 = \(p,_,_,s) i -> return $ TID (take i s) p
 alex_action_22 = \alexIn i -> myErr alexIn "Unbalanced Multiline"
 alex_action_23 = unknown
 {-# LINE 1 "templates/GenericTemplate.hs" #-}
