@@ -2,7 +2,7 @@
 {-# LANGUAGE CPP #-}
 {-# LINE 4 "Lexer.x" #-}
 
-module Main (main) where
+module Lexer where
 
 import System.Environment
 import System.Directory

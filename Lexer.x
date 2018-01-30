@@ -2,7 +2,7 @@
 -- Haskell code to initialize the module
 -----------------------------------------------------------------------------
 {
-module Main (main) where
+module Lexer where
 
 import System.Environment
 import System.Directory
