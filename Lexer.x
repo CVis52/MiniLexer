@@ -172,7 +172,6 @@ data Token = TIF AlexPosn
             |TRPAR AlexPosn
             |TSEMICOLON AlexPosn
             |TEOF
-        deriving (Eq)
 
 -----------------------------------------------------------------------------
 -- When showing the user the data, the position of the pattern is irrelevant,
@@ -201,8 +200,32 @@ instance Show Token where
         TLPAR _ -> "LPAR"
         TRPAR _ -> "RPAR"
         TSEMICOLON _ -> "SEMICOLON"
-        
 
+----------------------------------------------------------------------------
+-- Since only one token can ever be in a particular position, we must ignore
+-- the alexPosn, or else equality will always fail when we want to see if two
+-- tokens are of the same type.
+-----------------------------------------------------------------------------
+instance Eq Token where
+    (==) (TIF _) (TIF _) = True
+    (==) (TTHEN _) (TTHEN _) = True
+    (==) (TWHILE _) (TWHILE _) = True
+    (==) (TDO _) (TDO _) = True
+    (==) (TINPUT _) (TINPUT _) = True
+    (==) (TELSE _) (TELSE _) = True
+    (==) (TBEGIN _) (TBEGIN _) = True
+    (==) (TEND _) (TEND _) = True
+    (==) (TWRITE _) (TWRITE _) = True
+    (==) (TADD _) (TADD _) = True
+    (==) (TASSIGN _) (TASSIGN _) = True
+    (==) (TSUB _) (TSUB _) = True
+    (==) (TMUL _) (TMUL _) = True
+    (==) (TDIV _) (TDIV _) = True
+    (==) (TLPAR _) (TLPAR _) = True
+    (==) (TRPAR _) (TRPAR _) = True
+    (==) (TSEMICOLON _) (TSEMICOLON _) = True
+    (==) (TID s1 _) (TID s2 _) = if (s1 == s2) then True else False
+    (==) (TNUM n1 _) (TNUM n2 _) = if (n1 == n2) then True else False
 -----------------------------------------------------------------------------
 -- I honestly have no idea why Alex required us to define this ourself.
 -----------------------------------------------------------------------------

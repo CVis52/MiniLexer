@@ -3,25 +3,17 @@ module Main (main) where
 import qualified Lexer as L
 import System.Environment
 import System.Directory
+import Rainbow
 
 defDir = "profTests/"
-
+errMsg = fore red
+sucMsg = fore green
 
 main = do
     args <- getArgs
+    putChunkLn $ (errMsg  (chunk $ sep' 77))
     case (length args) of
         1 -> tester (args !! 0) 
-{-
-            let path = (args !! 0)
-            isDir <- doesDirectoryExist path
-            case isDir of
-                True -> do
-                    dirCont <- getDirectoryContents path
-                    let testFiles = getMs path dirCont
-                    --printPaths testFiles
-                    runTests testFiles
-                False -> error "Directory Is Not Found"
--}
         _ -> tester defDir
 
 
@@ -32,7 +24,7 @@ tester path = do
             dirCont <- getDirectoryContents path
             let testFiles = getMs path dirCont
             runTests testFiles
-        False -> error "Directory Not Found"
+        False -> error $ path ++ "Directory Not Found"
 
 
 printPaths :: [[Char]] -> IO ()
@@ -71,18 +63,3 @@ runTest n f = do
 sep f n = sep' $ n + (length f)
 sep' 0 = ""
 sep' n = '=' : (sep' $ n-1)
-
-{-
-    dir <- (args !! 0)
-    cont <- readFile dir
-    let valid = True
---    valid <- doesDirectoryExist dir
-    case valid of
-        True -> do
-            fs <- getDirectoryContents dir
-            print "test"
-        False -> error "Directory Not Found"
--}
-
-
- 
